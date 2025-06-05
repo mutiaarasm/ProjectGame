@@ -6,18 +6,22 @@ using UnityEngine.InputSystem;
 public class PlayerMovement : MonoBehaviour
 {
     [Header("Player Movement")]
-    public float walkSpeed = 3f;
-    public float runSpeed = 6f;
+    public float moveSpeed = 5f;
+    public float runSpeed = 8f;
     public float jumpForce = 10f;
 
     private Rigidbody2D rb;
     private Animator anim;
     private SpriteRenderer sprite;
-    private PlayerController playerController;
+    private PlayerController playerController; // tambahkan PlayerInputActions
+
+    // Untuk input dari button UI
+    private float mobileInputX = 0f;
 
     private Vector2 moveInput;
+    private bool isJumping = false;
 
-    private enum MovementState { idle = 0, run = 1, jump = 2, walk = 3 }
+    private enum MovementState { idle, walk, jump, fall, run}
 
     [Header("Jump Settings")]
     [SerializeField] private LayerMask jumpableGround;
@@ -30,117 +34,132 @@ public class PlayerMovement : MonoBehaviour
         sprite = GetComponent<SpriteRenderer>();
         coll = GetComponent<BoxCollider2D>();
 
-        playerController = new PlayerController();
+        playerController = new PlayerController(); //Inisialisasi PlayerInputActions
     }
 
     private void OnEnable()
     {
         playerController.Enable();
 
-        playerController.Movement.Move.performed += OnMovePerformed;
-        playerController.Movement.Move.canceled += OnMoveCanceled;
+        playerController.Movement.Move.performed += ctx => moveInput = ctx.ReadValue<Vector2>();
+        playerController.Movement.Move.canceled += ctx => moveInput = Vector2.zero;
 
-        playerController.Movement.Jump.performed += OnJumpPerformed;
+        playerController.Movement.Jump.performed += ctx => Jump();
+
+        
     }
 
     private void OnDisable()
     {
-        playerController.Movement.Move.performed -= OnMovePerformed;
-        playerController.Movement.Move.canceled -= OnMoveCanceled;
-
-        playerController.Movement.Jump.performed -= OnJumpPerformed;
-
         playerController.Disable();
-    }
-
-    private void OnMovePerformed(InputAction.CallbackContext context)
-    {
-        moveInput = context.ReadValue<Vector2>();
-    }
-
-    private void OnMoveCanceled(InputAction.CallbackContext context)
-    {
-        moveInput = Vector2.zero;
-    }
-
-    private void OnJumpPerformed(InputAction.CallbackContext context)
-    {
-        Jump();
     }
 
     private void Update()
     {
-        UpdateAnimation();
+        // Jika menggunakan mobile input, pakai itu
+        if (Application.isMobilePlatform)
+        {
+            moveInput = new Vector2(mobileInputX, 0f);
+        }
+        else
+        {
+            // Kalau bukan mobile, pakai Input System
+            moveInput = playerController.Movement.Move.ReadValue<Vector2>();
+        }
+
     }
 
     private void FixedUpdate()
     {
-        float absMoveX = Mathf.Abs(moveInput.x);
-        float currentSpeed = 0f;
-
-        if (absMoveX > 0.5f)
-        {
-            currentSpeed = runSpeed;
-        }
-        else if (absMoveX > 0.01f)
-        {
-            currentSpeed = walkSpeed;
-        }
-        else
-        {
-            currentSpeed = 0f;
-        }
-
-        Vector2 targetVelocity = new Vector2(moveInput.x * currentSpeed, rb.velocity.y);
+        //gabungan mobile
+        Vector2 targetVelocity = new Vector2((moveInput.x + mobileInputX) * moveSpeed, rb.velocity.y);
         rb.velocity = targetVelocity;
+
+        UpdateAnimation();
+
+        // Reset isJumping hanya saat grounded dan velocity Y mendekati 0
+        if (isGrounded() && Mathf.Abs(rb.velocity.y) < 0.01f)
+        {
+            isJumping = false;
+        }
+
     }
 
     private void UpdateAnimation()
-{
-    MovementState state;
-
-    if (!IsGrounded())
     {
-        // Saat di udara, langsung pakai animasi jump
-        state = MovementState.jump;
-    }
-    else
-    {
-        float absMoveX = Mathf.Abs(moveInput.x);
+        MovementState state;
 
-        if (absMoveX > 0.5f)
-        {
-            state = MovementState.run;
-        }
-        else if (absMoveX > 0.01f)
+        // Gabungkan input dari keyboard dan mobile
+        float horizontal = moveInput.x != 0 ? moveInput.x : mobileInputX;
+
+        // Cek arah jalan
+        if (horizontal > 0f)
         {
             state = MovementState.walk;
+            sprite.flipX = false;
+        }
+        else if (horizontal < 0f)
+        {
+            state = MovementState.walk;
+            sprite.flipX = true;
         }
         else
         {
             state = MovementState.idle;
         }
 
-        if (moveInput.x > 0f)
-            sprite.flipX = false;
-        else if (moveInput.x < 0f)
-            sprite.flipX = true;
+        // Cek apakah sedang lompat atau jatuh
+        if (rb.velocity.y > 0.1f)
+        {
+            state = MovementState.jump;
+        }
+        else if (rb.velocity.y < -0.1f)
+        {
+            state = MovementState.fall;
+        }
+
+        anim.SetInteger("state", (int)state);
     }
 
-    anim.SetInteger("state", (int)state);
-}
 
-
-    private bool IsGrounded()
+    private bool isGrounded()
     {
         return Physics2D.BoxCast(coll.bounds.center, coll.bounds.size, 0f, Vector2.down, .1f, jumpableGround);
     }
 
     private void Jump()
     {
-        if (IsGrounded())
+        // Cek ulang grounded saat ini, dan jangan gunakan isJumping (karena bisa delay)
+        if (isGrounded())
         {
             rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+            isJumping = true;
+        }
+    }
+
+    // Fungsi ini dipanggil saat tombol kanan ditekan
+    public void MoveRight(bool isPressed)
+    {
+        if (isPressed)
+            mobileInputX = 1f;
+        else if (mobileInputX == 1f)
+            mobileInputX = 0f;
+    }
+
+    public void MoveLeft(bool isPressed)
+    {
+        if (isPressed)
+            mobileInputX = -1f;
+        else if (mobileInputX == -1f)
+            mobileInputX = 0f;
+    }
+
+    // Fungsi ini dipanggil saat tombol lompat ditekan
+    public void MobileJump()
+    {
+        if (isGrounded())
+        {
+            Jump();
         }
     }
 }
