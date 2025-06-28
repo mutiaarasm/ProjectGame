@@ -162,4 +162,12 @@ public class PlayerMovement : MonoBehaviour
             Jump();
         }
     }
+    private void OnTriggerEnter2D(Collider2D other)
+{
+    if (other.CompareTag("Enemy"))
+    {
+        Debug.Log("Player menyentuh musuh! Game Over!");
+        KomponenManager.instance.TriggerGameOverByFall();
+    }
+}
 }
