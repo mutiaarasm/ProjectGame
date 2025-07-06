@@ -1,47 +1,31 @@
 using UnityEngine;
 
+
 public class AudioManager : MonoBehaviour
 {
     public static AudioManager instance;
-
-    private AudioSource bgMusicSource;
+    private AudioSource audioSource;
     private bool isMuted = false;
 
-    private void Awake()
+    void Awake()
     {
         if (instance == null)
         {
             instance = this;
-            DontDestroyOnLoad(gameObject);
-
-            bgMusicSource = GetComponent<AudioSource>();
-
-            // Load setting dari PlayerPrefs
-            isMuted = PlayerPrefs.GetInt("MusicMuted", 0) == 1;
-            ApplyMuteState();
+            DontDestroyOnLoad(gameObject); // agar tidak hilang saat ganti scene
         }
         else
         {
             Destroy(gameObject);
         }
+
+        audioSource = GetComponent<AudioSource>();
     }
 
     public void ToggleMusic()
     {
         isMuted = !isMuted;
-        ApplyMuteState();
-
-        // Simpan preferensi
-        PlayerPrefs.SetInt("MusicMuted", isMuted ? 1 : 0);
-        PlayerPrefs.Save();
-    }
-
-    public void ApplyMuteState()
-    {
-        if (bgMusicSource != null)
-        {
-            bgMusicSource.mute = isMuted;
-        }
+        audioSource.mute = isMuted;
     }
 
     public bool IsMuted()

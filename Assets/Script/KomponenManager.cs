@@ -39,42 +39,38 @@ public class KomponenManager : MonoBehaviour
 
         winPanel?.SetActive(false);
         gameOverPanel?.SetActive(false);
-
         ResetStars(gameplayStars);
         ResetStars(winStars);
     }
 
     private void Start()
-{
-    Time.timeScale = 1;
-    timer = timeLimit;
-    UpdateKomponenDisplay();
-
-    string currentLevel = SceneManager.GetActiveScene().name;
-
-    switch (currentLevel)
     {
-        case "stone":
-            targetKomponen = 70; // Target kemenangan
-            starThresholds = new int[] { 20, 40, 50 }; // Bintang 1,2,3
-            break;
+        Time.timeScale = 1;
+        timer = timeLimit;
+        UpdateKomponenDisplay();
 
-        case "Level2":
-            targetKomponen = 100;
-            starThresholds = new int[] { 25, 45, 75 };
-            break;
+        string currentLevel = SceneManager.GetActiveScene().name;
 
-        case "Level3":
-            targetKomponen = 105;
-            starThresholds = new int[] { 30, 45, 80 };
-            break;
-
-        default:
-            targetKomponen = 50;
-            starThresholds = new int[] { 10, 30, 50 };
-            break;
+        switch (currentLevel)
+        {
+            case "stone":
+                targetKomponen = 70;
+                starThresholds = new int[] { 10, 20, 30 };
+                break;
+            case "Level2":
+                targetKomponen = 100;
+                starThresholds = new int[] { 15, 17, 20 };
+                break;
+            case "Level3":
+                targetKomponen = 105;
+                starThresholds = new int[] { 15, 18, 20 };
+                break;
+            default:
+                targetKomponen = 50;
+                starThresholds = new int[] { 10, 30, 50 };
+                break;
+        }
     }
-}
 
     private void Update()
     {
@@ -84,7 +80,7 @@ public class KomponenManager : MonoBehaviour
         if (timer <= 0)
         {
             timer = 0;
-            EndGame();
+            HandleTimeoutGameEnd();
         }
 
         UpdateTimerDisplay();
@@ -108,11 +104,17 @@ public class KomponenManager : MonoBehaviour
 
     public void ChangeKomponen(int amount)
     {
+        if (isGameEnded) return;
+
         komponen += amount;
         UpdateKomponenDisplay();
         UpdateStarRating();
         UpdateStarDisplay(gameplayStars);
-        SaveProgress(SceneManager.GetActiveScene().name); 
+
+        if (currentStarRating == 3)
+        {
+            WinGame(); // Menang otomatis jika dapat bintang 3
+        }
     }
 
     private void UpdateStarRating()
@@ -148,48 +150,46 @@ public class KomponenManager : MonoBehaviour
         }
     }
 
-    private void EndGame()
+    private void WinGame()
     {
         isGameEnded = true;
-        UpdateStarRating();
         ResetStars(gameplayStars);
         ResetStars(winStars);
         UpdateStarDisplay(winStars);
 
-        winPanel?.SetActive(false);
-        gameOverPanel?.SetActive(false);
-        nextLevelButton?.SetActive(false);
+        winText.text = "YOU WIN";
+        winPanel?.SetActive(true);
         retryButton?.SetActive(false);
+        gameOverPanel?.SetActive(false);
 
+        nextLevelButton?.SetActive(true);
         SaveProgress(SceneManager.GetActiveScene().name);
+        CheckAndResetAllProgress();
 
-        if (komponen >= targetKomponen)
-        {
-            winText.text = "YOU WIN";
-            winPanel?.SetActive(true);
-            if (currentStarRating == 3)
-            {
-                nextLevelButton?.SetActive(true);
+        Time.timeScale = 0;
+    }
 
-                // Reset progress jika level terakhir selesai dengan 3 bintang
-                if (SceneManager.GetActiveScene().name == "Level3")
-                {
-                    PlayerPrefs.DeleteAll();
-                    PlayerPrefs.Save();
-                    Debug.Log("Progress di-reset karena Level3 selesai dengan 3 bintang!");
-                }
-            }
-        }
-        else if (komponen >= 10)
+    private void HandleTimeoutGameEnd()
+    {
+        if (isGameEnded) return;
+
+        isGameEnded = true;
+        ResetStars(gameplayStars);
+        ResetStars(winStars);
+        UpdateStarDisplay(winStars);
+
+        if (currentStarRating < 3)
         {
             winText.text = "TRY AGAIN";
             winPanel?.SetActive(true);
             retryButton?.SetActive(true);
+            gameOverPanel?.SetActive(false);
         }
-        else
-        {
-            gameOverPanel?.SetActive(true);
-        }
+
+        nextLevelButton?.SetActive(false);
+
+        // Tambahkan ini agar tetap menyimpan bintang
+        SaveProgress(SceneManager.GetActiveScene().name);
 
         Time.timeScale = 0;
     }
@@ -205,7 +205,41 @@ public class KomponenManager : MonoBehaviour
         {
             PlayerPrefs.SetInt(starKey, currentStarRating);
             PlayerPrefs.SetInt(komponenKey, komponen);
+        }
+
+        if (currentStarRating == 3)
+        {
+            if (levelName == "stone")
+                PlayerPrefs.SetInt("Level2_Unlocked", 1);
+            else if (levelName == "Level2")
+                PlayerPrefs.SetInt("Level3_Unlocked", 1);
+        }
+
+        PlayerPrefs.Save();
+    }
+
+    private void CheckAndResetAllProgress()
+    {
+        string[] levelNames = { "stone", "Level2", "Level3" };
+        bool allPerfect = true;
+
+        foreach (string level in levelNames)
+        {
+            int stars = PlayerPrefs.GetInt("Level_" + level + "_Stars", 0);
+            if (stars < 3)
+            {
+                allPerfect = false;
+                break;
+            }
+        }
+
+        if (allPerfect)
+        {
+            Debug.Log("Semua level sudah bintang 3. Reset semua progress.");
+            PlayerPrefs.DeleteAll();
+            PlayerPrefs.SetInt("stone_Unlocked", 1);
             PlayerPrefs.Save();
+            SceneManager.LoadScene("MainMenu");
         }
     }
 
@@ -213,6 +247,7 @@ public class KomponenManager : MonoBehaviour
     {
         if (isGameEnded) return;
         isGameEnded = true;
+        SaveProgress(SceneManager.GetActiveScene().name); // Tambahan juga di sini
         Time.timeScale = 0;
         gameOverPanel?.SetActive(true);
     }
